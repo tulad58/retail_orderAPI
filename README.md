@@ -39,3 +39,41 @@
 * Экспорт товаров;
 * Админка заказов (проставление статуса заказа и уведомление клиента);
 * Выделение медленных методов в отдельные асинхронные функции (email, импорт, экспорт).
+
+
+1. Создать модели:
+    1. Shop
+        - name
+        - url
+    2. Category
+        - shops (m2m)
+        - name
+    3. Product
+        - category
+        - name
+    4. ProductInfo
+        - product
+        - shop
+        - name
+        - quantity
+        - price
+        - price_rrc
+    5. Parameter
+        - name
+    6. ProductParameter
+        - product_info
+        - parameter
+        - value
+    7. Order
+        - user
+        - dt
+        - status
+    8. OrderItem
+        - order
+        - product
+        - shop
+        - quantity
+    9. Contact
+        - type
+        - user
+        - value
