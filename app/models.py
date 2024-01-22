@@ -64,10 +64,11 @@ class ProductInfo(models.Model):
                             on_delete=models.CASCADE, 
                             verbose_name="Магазин",
                             blank=True)
-    name = models.CharField(max_length=50, blank=True)
+    model = models.CharField(max_length=50, blank=True)
     quantity = models.PositiveIntegerField(verbose_name="Колисетсво")
     price = models.PositiveIntegerField(verbose_name="Цена")
     price_rrc = models.PositiveIntegerField(verbose_name="Рекомендуемая розничная цена")
+    external_id = models.PositiveIntegerField(verbose_name='Внешний ИД', blank=True)
 
     class Meta:
         verbose_name = "Информация о прдукте"
@@ -75,7 +76,7 @@ class ProductInfo(models.Model):
 
 
     
-class Parametr(models.Model):
+class Parameter(models.Model):
     name = models.CharField(max_length=60, verbose_name="Название параметра")
 
     class Meta:
@@ -87,18 +88,18 @@ class Parametr(models.Model):
         return self.name
     
 
-class ProductParametr(models.Model):
+class ProductParameter(models.Model):
     product_info = models.ForeignKey(ProductInfo,
                                 on_delete=models.CASCADE,
                                 blank=True,
                                 verbose_name="Информация о продукте",
-                                related_name="product_parametrs")
-    parametr = models.ForeignKey(Parametr,
+                                related_name="product_parameters")
+    parameter = models.ForeignKey(Parameter,
                             on_delete=models.CASCADE, 
                             blank=True,
                             verbose_name="Параметр",
-                            related_name="product_parametrs")
-    value = models.PositiveIntegerField(verbose_name="Стоимость")
+                            related_name="product_parameters")
+    value = models.CharField(max_length=50, verbose_name="Стоимость")
 
     class Meta:
         verbose_name = "Продукт и Параметр"
