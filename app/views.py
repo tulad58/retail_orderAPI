@@ -1,26 +1,36 @@
 import requests
+
 from django.shortcuts import render, redirect
 from django.conf import settings
-from django.core.files.storage import FileSystemStorage
+
+
+from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from rest_framework.authtoken.models import Token
+from rest_framework.viewsets import ModelViewSet
+from rest_framework import status
 
 from yaml import load as load_yaml, Loader
-
-
 from .models import Shop, Category, Contact, Order, OrderItem, Parameter, Product, ProductInfo, ProductParameter, User
-from .forms import ProductUploadForm
 
-def simple_upload(request):
-    if request.method == 'POST' and request.FILES['myfile']:
-        myfile = request.FILES['myfile']
-        fs = FileSystemStorage()
-        filename = fs.save(myfile.name, myfile)
-        uploaded_file_url = fs.url(filename)
-        return render(request, 'simple_upload.html', {
-            'uploaded_file_url': uploaded_file_url
-        })
-    return render(request, 'simple_upload.html')
+from .serializers import RegistrationSerializer
 
 
+class RegistrationAPIView(APIView):
+    """
+    Разрешить всем пользователям (аутентифицированным и нет) доступ к данному эндпоинту.
+    """
+    permission_classes = (AllowAny,)
+    serializer_class = RegistrationSerializer
+
+    def post(self, request):
+        user = request.data.get('user', {})
+        serializer = self.serializer_class(data=user)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 def upload_products(request):
     if request.method == 'POST':

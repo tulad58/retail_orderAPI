@@ -1,7 +1,8 @@
-from django.urls import path
-from .views import simple_upload, upload_products
+from django.urls import include, path, re_path
+from .views import upload_products, RegistrationAPIView
+
 
 urlpatterns = [
-    path('', simple_upload, name="upload"),
-    path('products/', upload_products, name="upload")
+    path('products/', upload_products, name="upload"),
+    path('users/', RegistrationAPIView.as_view(), name='auth')
 ]
