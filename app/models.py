@@ -3,93 +3,12 @@ from datetime import datetime, timedelta
 
 from django.conf import settings 
 from django.contrib.auth.models import (
-	AbstractBaseUser, BaseUserManager, PermissionsMixin
+	AbstractUser, BaseUserManager, PermissionsMixin
 )
-
-
+from django.contrib.auth import validators
+from django.utils.translation import gettext_lazy as _
 from django.db import models
 
-
-
-class UserManager(BaseUserManager):
-    """
-    Django требует, чтобы кастомные пользователи определяли свой собственный
-    класс Manager. Унаследовавшись от BaseUserManager, мы получаем много того
-    же самого кода, который Django использовал для создания User (для демонстрации).
-    """
-
-    def create_user(self, name, email, surname,password=None):
-        """ Создает и возвращает пользователя с имэйлом, паролем и именем. """
-        if name is None:
-            raise TypeError('Users must have a name.')
-
-        if email is None:
-            raise TypeError('Users must have an email address.')
-
-        user = self.model(name=name, surname=surname, email=self.normalize_email(email))
-        user.set_password(password)
-        user.save()
-
-        return user
-
-    def create_superuser(self, username, email, password):
-        """ Создает и возввращет пользователя с привилегиями суперадмина. """
-        if password is None:
-            raise TypeError('Superusers must have a password.')
-
-        user = self.create_user(username, email, password)
-        user.is_superuser = True
-        user.is_staff = True
-        user.save()
-
-        return user
-    
-
-class User(AbstractBaseUser, PermissionsMixin):
-    name = models.CharField(db_index=True, max_length=255, unique=True)
-    email = models.EmailField(db_index=True, unique=True)
-    surname = models.CharField(max_length=100)
-    is_active = models.BooleanField(default=True)
-    is_staff = models.BooleanField(default=False)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    USERNAME_FIELD = 'email'
-    REQUIRED_FIELDS = ['name', 'surname']
-    objects = UserManager()
-
-    def __str__(self):
-        return self.email
-
-    @property
-    def token(self):
-        return self._generate_jwt_token()
-
-    def get_full_name(self):
-        """
-        Этот метод требуется Django для таких вещей, как обработка электронной
-        почты. Обычно это имя фамилия пользователя, но поскольку мы не
-        используем их, будем возвращать username.
-        """
-        return self.username
-
-    def get_short_name(self):
-        """ Аналогично методу get_full_name(). """
-        return self.username
-
-    def _generate_jwt_token(self):
-        """
-        Генерирует веб-токен JSON, в котором хранится идентификатор этого
-        пользователя, срок действия токена составляет 1 день от создания
-        """
-        dt = datetime.now() + timedelta(days=1)
-
-        token = jwt.encode({
-            'id': self.pk,
-            'exp': int(dt.strftime('%s'))
-        }, settings.SECRET_KEY, algorithm='HS256')
-
-        return token
-        
 
 STATE_CHOICES = (
     ('basket', 'Статус корзины'),
@@ -100,6 +19,90 @@ STATE_CHOICES = (
     ('delivered', 'Доставлен'),
     ('canceled', 'Отменен'),
 )
+
+USER_TYPE_CHOICES = (
+    ('shop', 'Магазин'),
+    ('buyer', 'Покупатель'),
+
+)
+
+
+class UserManager(BaseUserManager):
+    """
+    Миксин для управления пользователями
+    """
+    use_in_migrations = True
+
+    def _create_user(self, email, password, **extra_fields):
+        """
+        Create and save a user with the given username, email, and password.
+        """
+        if not email:
+            raise ValueError('The given email must be set')
+        email = self.normalize_email(email)
+        user = self.model(email=email, **extra_fields)
+        user.set_password(password)
+        user.save(using=self._db)
+        return user
+
+    def create_user(self, email, password=None, **extra_fields):
+        extra_fields.setdefault('is_staff', False)
+        extra_fields.setdefault('is_superuser', False)
+        return self._create_user(email, password, **extra_fields)
+
+    def create_superuser(self, email, password, **extra_fields):
+        extra_fields.setdefault('is_staff', True)
+        extra_fields.setdefault('is_superuser', True)
+        extra_fields.setdefault('is_active', True)
+
+        if extra_fields.get('is_staff') is not True:
+            raise ValueError('Superuser must have is_staff=True.')
+        if extra_fields.get('is_superuser') is not True:
+            raise ValueError('Superuser must have is_superuser=True.')
+
+        return self._create_user(email, password, **extra_fields)
+    
+
+class User(AbstractUser):
+    """
+    Стандартная модель пользователей
+    """
+    REQUIRED_FIELDS = []
+    objects = UserManager()
+    USERNAME_FIELD = 'email'
+    email = models.EmailField(_('email address'), unique=True)
+    company = models.CharField(verbose_name='Компания', max_length=40, blank=True)
+    position = models.CharField(verbose_name='Должность', max_length=40, blank=True)
+    username_validator = validators.UnicodeUsernameValidator()
+    username = models.CharField(
+        _('username'),
+        max_length=150,
+        help_text=_('Required. 150 characters or fewer. Letters, digits and @/./+/-/_ only.'),
+        validators=[username_validator],
+        error_messages={
+            'unique': _("A user with that username already exists."),
+        },
+    )
+    is_active = models.BooleanField(
+        _('active'),
+        default=False,
+        help_text=_(
+            'Designates whether this user should be treated as active. '
+            'Unselect this instead of deleting accounts.'
+        ),
+    )
+    type = models.CharField(verbose_name='Тип пользователя', choices=USER_TYPE_CHOICES, max_length=5, default='buyer')
+
+    def __str__(self):
+        return f'{self.first_name} {self.last_name}'
+
+    class Meta:
+        verbose_name = 'Пользователь'
+        verbose_name_plural = "Список пользователей"
+        ordering = ('email',)
+        
+
+
 
 
 class Shop(models.Model):

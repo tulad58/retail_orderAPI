@@ -1,3 +1,4 @@
+from django.http import JsonResponse
 import requests
 
 from django.shortcuts import render, redirect
@@ -9,28 +10,80 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.authtoken.models import Token
 from rest_framework.viewsets import ModelViewSet
-from rest_framework import status
+from rest_framework import status, permissions
+from django.contrib.auth.password_validation import validate_password
+from django.contrib.auth import authenticate
 
 from yaml import load as load_yaml, Loader
 from .models import Shop, Category, Contact, Order, OrderItem, Parameter, Product, ProductInfo, ProductParameter, User
 
-from .serializers import RegistrationSerializer
+from .serializers import UserSerializer
 
 
-class RegistrationAPIView(APIView):
+class RegisterAccount(APIView):
     """
-    Разрешить всем пользователям (аутентифицированным и нет) доступ к данному эндпоинту.
+    Для регистрации покупателей
     """
-    permission_classes = (AllowAny,)
-    serializer_class = RegistrationSerializer
+    def post(self, request, *args, **kwargs):
+        """
+            Process a POST request and create a new user.
 
-    def post(self, request):
-        user = request.data.get('user', {})
-        serializer = self.serializer_class(data=user)
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
+            Args:
+                request (Request): The Django request object.
 
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+            Returns:
+                JsonResponse: The response indicating the status of the operation and any errors.
+            """
+        if {'first_name', 'last_name', 'email', 'password'}.issubset(request.data):
+            try:
+                validate_password(request.data['password'])
+            except Exception as password_error:
+                error_array = []
+                for item in password_error:
+                    error_array.append(item)
+                return JsonResponse({'Status': False, 'Errors': {'password': error_array}})
+            else:
+                user_serializer = UserSerializer(data=request.data)
+                if user_serializer.is_valid():
+                    user = user_serializer.save()
+                    user.set_password(request.data['password'])
+                    user.save()
+                    return JsonResponse({'Status': True})
+                else:
+                    return JsonResponse({'Status': False, 'Errors': user_serializer.errors})
+
+        return JsonResponse({'Status': False, 'Errors': 'Не указаны все необходимые аргументы'})
+
+
+
+class LoginAccount(APIView):
+    """
+    Класс для авторизации пользователей
+    """
+    permission_classes = (permissions.AllowAny,)
+    def post(self, request, *args, **kwargs):
+        """
+                Authenticate a user.
+
+                Args:
+                    request (Request): The Django request object.
+
+                Returns:
+                    JsonResponse: The response indicating the status of the operation and any errors.
+                """
+        if {'email', 'password'}.issubset(request.data):
+            user = authenticate(request, username=request.data['email'], password=request.data['password'])
+            if user is not None:
+                if user.is_active:
+                    token, _ = Token.objects.get_or_create(user=user)
+
+                    return JsonResponse({'Status': True, 'Token': token.key})
+
+            return JsonResponse({'Status': False, 'Errors': 'Не удалось авторизовать'})
+
+        return JsonResponse({'Status': False, 'Errors': 'Не указаны все необходимые аргументы'})
+
+
 
 def upload_products(request):
     if request.method == 'POST':
