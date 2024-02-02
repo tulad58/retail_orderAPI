@@ -45,7 +45,7 @@ INSTALLED_APPS = [
     'app',
     'rest_framework',
     'rest_framework.authtoken',
-    'django_extensions'
+    'django_extensions',
 ]
 
 MIDDLEWARE = [
@@ -139,19 +139,20 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
+AUTH_USER_MODEL = 'app.User'
+
 REST_FRAMEWORK = {
     # Use Django's standard `django.contrib.auth` permissions,
     # or allow read-only access for unauthenticated users.
   
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework.authentication.TokenAuthentication',
-    ),
-    
+        'rest_framework.authentication.SessionAuthentication',
+        'rest_framework.authentication.BasicAuthentication'
+    )
+
 }
 
+AUTHENTICATION_BACKENDS = ('django.contrib.auth.backends.ModelBackend',)
 
-AUTH_USER_MODEL = 'app.User'
-
-AUTHENTICATION_BACKENDS = [
-    "django.contrib.auth.backends.RemoteUserBackend",
-]
+DEFAULT_PERMISSION_CLASSES = ('rest_framework.permissions.AllowAny',)

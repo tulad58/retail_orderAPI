@@ -1,24 +1,25 @@
 from django.http import JsonResponse
-import requests
+from requests import request
 
 from django.shortcuts import render, redirect
 from django.conf import settings
+from django.db.models import Q, Sum, F
+from django.contrib.auth.password_validation import validate_password
+from django.contrib.auth import authenticate, logout
+from django.db import IntegrityError
 
-
-from rest_framework.permissions import IsAuthenticated, AllowAny
-from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.authtoken.models import Token
-from rest_framework.viewsets import ModelViewSet
-from rest_framework import status, permissions
-from django.contrib.auth.password_validation import validate_password
-from django.contrib.auth import authenticate
+from rest_framework import generics
+from rest_framework.response import Response
+from rest_framework.request import Request 
 
-from yaml import load as load_yaml, Loader
 from .models import Shop, Category, Contact, Order, OrderItem, Parameter, Product, ProductInfo, ProductParameter, User
 
-from .serializers import UserSerializer
+from .serializers import CategorySerializer, OrderItemSerializer, OrderSerializer, ProductInfoSerializer, ShopSerializer, UserSerializer
 
+from ujson import loads as load_json
+from yaml import load as load_yaml, Loader
 
 class RegisterAccount(APIView):
     """
@@ -60,7 +61,8 @@ class LoginAccount(APIView):
     """
     Класс для авторизации пользователей
     """
-    permission_classes = (permissions.AllowAny,)
+
+    # Авторизация методом POST
     def post(self, request, *args, **kwargs):
         """
                 Authenticate a user.
@@ -84,7 +86,142 @@ class LoginAccount(APIView):
         return JsonResponse({'Status': False, 'Errors': 'Не указаны все необходимые аргументы'})
 
 
+class LogOutAPIView(APIView):
+    def logut(self, request):
+        logout(request)
 
+
+class CategoryListAPIView(generics.ListAPIView):
+    """
+    Класс для просмотра категорий
+    """
+    queryset = Category.objects.all()
+    serializer_class = CategorySerializer
+
+
+class ShopListAPIView(generics.ListAPIView):
+    """
+    Класс для просмотра магазинов
+    """
+    queryset = Shop.objects.all()
+    serializer_class = ShopSerializer
+
+
+class ProductInfoAPIView(APIView):       
+    """
+    Класс фильтрации продуктов и категорий
+    """
+    def get(self, request, format=None):
+        shop_id = request.query_params.get('shop_id')
+        category_id = request.query_params.get('category_id')
+        query = Q(shop_id=shop_id) | Q(product__category_id=category_id)
+        queryset = ProductInfo.objects.filter(
+            query
+            ).select_related(
+        'shop', 'product__category').prefetch_related(
+        'product_parameters__parameter').distinct()
+        serializer = ProductInfoSerializer(queryset, many=True)
+
+        return Response(serializer.data)
+
+class CartAPIView(APIView):
+    """
+    Корзина с возможностью добавления и удаления товаров
+    Список товаров с полями
+
+    - Наименование товара
+    - Магазин
+    - Цена
+    - Количество
+    - Сумма
+
+    A class for managing the user's shopping basket.
+
+    Methods:
+    - get: Retrieve the items in the user's basket.
+    - post: Add an item to the user's basket.
+    - put: Update the quantity of an item in the user's basket.
+    - delete: Remove an item from the user's basket.
+
+    Attributes:
+    - None
+    """
+
+    # получить корзину
+    def get(self, request, *args, **kwargs):
+        """
+                Retrieve the items in the user's basket.
+
+                Args:
+                - request (Request): The Django request object.
+
+                Returns:
+                - Response: The response containing the items in the user's basket.
+                """
+        if not request.user.is_authenticated:
+            return JsonResponse({'Status': False, 'Error': 'Log in required'}, status=403)
+        basket = Order.objects.filter(
+            user_id=request.user.id, state='basket').prefetch_related(
+            'ordered_items__product_info__product__category',
+            'ordered_items__product_info__product_parameters__parameter').annotate(
+            total_sum=Sum(F('ordered_items__quantity') * F('ordered_items__product_info__price'))).distinct()
+
+        serializer = OrderSerializer(basket, many=True)
+        return Response(serializer.data)
+    
+    def post(self, request, *args, **kwargs):
+        """
+        Add an items to the user's basket.
+
+        Args:
+        - request (Request): The Django request object.
+
+        Returns:
+        - JsonResponse: The response indicating the status of the operation and any errors.
+        """
+        if not request.user.is_authenticated:
+            return JsonResponse({'Status': False, 'Error': 'Log in required'}, status=403)
+
+        items = request.data.get('items')
+        if items:
+            try:
+                items_dict = load_json(items)
+            except ValueError:
+                JsonResponse({'status': False, 'errors': 'Неверный формат запроса'})
+            order, status = Order.objects.get_or_create(user=request.user.id, status='basket')
+            objects_created = 0
+            for order_item in items_dict:
+                order_item.update({'order': order.id})
+                serializer = OrderItemSerializer(data=order_item)
+                if serializer.is_valid():
+                    try:
+                        serializer.save()
+                    except InterruptedError as error:
+                        return JsonResponse({'status': 'False', 'error': str(error)})
+                    else:
+                        objects_created += 1
+                else:
+                    return JsonResponse({'status': 'false', 'errors': serializer.errors})
+            return JsonResponse({'status': True, 'объектов создано': objects_created})    
+        return JsonResponse({'status': False, 'errors': 'Не указаны все необходимые аргументы'})    
+
+
+    def put(self, request):
+        user = request.user.id
+        user_obj = User.objects.get(id=user)
+        order = Order.objects.create(user=user_obj, status='new')
+        product_obj = Product.objects.get(id=request.data.get('product'))
+        shop_obj = Shop.objects.get(id=request.data.get('shop'))
+        order_items = OrderItem.objects.create(
+            order=order,
+            product=product_obj,
+            shop=shop_obj,
+            quantity=request.data.get('quantity'),
+        )
+
+
+        return Response(user)
+        
 def upload_products(request):
     if request.method == 'POST':
         try:
