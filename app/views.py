@@ -162,10 +162,10 @@ class CartAPIView(APIView):
             return JsonResponse({'status': False, 'Error':'Log in required'}, status=403)
         print(request.user.id)
         queryset = Order.objects.filter(user=request.user.id, state='basket').prefetch_related(
-            Prefetch('order_items__product_info__product__category', queryset=Category.objects.all()),
-            Prefetch('order_items__product_info__product_parameters__parameter', queryset=Parameter.objects.all()),
+            Prefetch('ordered_items__product_info__product__category', queryset=Category.objects.all()),
+            Prefetch('ordered_items__product_info__product_parameters__parameter', queryset=Parameter.objects.all()),
             ).annotate(
-            total_sum=Sum(F('order_items__quantity') * F('order_items__product__price'))).distinct()
+            total_sum=Sum(F('ordered_items__quantity') * F('ordered_items__product__price'))).distinct()
         serializer = OrderSerializer(queryset, many=True)
         return Response(serializer.data)
     
@@ -411,8 +411,44 @@ class OrderView(APIView):
                         return JsonResponse({'Status': True})
 
         return JsonResponse({'Status': False, 'Errors': 'Не указаны все необходимые аргументы'})
+
+
+class PartnerOrders(APIView):
+    """
+    Класс для получения заказов поставщиками
+     Methods:
+    - get: Retrieve the orders associated with the authenticated partner.
+
+    Attributes:
+    - None
+    """
+
+    def get(self, request, *args, **kwargs):
+        """
+               Retrieve the orders associated with the authenticated partner.
+
+               Args:
+               - request (Request): The Django request object.
+
+               Returns:
+               - Response: The response containing the orders associated with the partner.
+               """
+        if not request.user.is_authenticated:
+            return JsonResponse({'Status': False, 'Error': 'Log in required'}, status=403)
+
+        if request.user.type != 'shop':
+            return JsonResponse({'Status': False, 'Error': 'Только для магазинов'}, status=403)
+
+        order = Order.objects.filter(
+            ordered_items__product_info__shop__user_id=request.user.id).exclude(state='basket').prefetch_related(
+            'ordered_items__product_info__product__category',
+            'ordered_items__product_info__product_parameters__parameter').select_related('contact').annotate(
+            total_sum=Sum(F('ordered_items__quantity') * F('ordered_items__product_info__price'))).distinct()
+
+        serializer = OrderSerializer(order, many=True)
+        return Response(serializer.data)
     
-    
+
 def upload_products(request):
     """
         Upload yaml files to db

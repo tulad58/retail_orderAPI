@@ -141,12 +141,12 @@ class Product(models.Model):
 
 class ProductInfo(models.Model):
     product = models.ForeignKey(Product, 
-                            related_name="product_infos", 
+                            related_name="product_info", 
                             on_delete=models.CASCADE, 
                             verbose_name="Продукт",
                             blank=True,)
     shop =  models.ForeignKey(Shop, 
-                            related_name="product_infos",
+                            related_name="product_info",
                             on_delete=models.CASCADE, 
                             verbose_name="Магазин",
                             blank=True)
@@ -219,17 +219,17 @@ class OrderItem(models.Model):
                             on_delete=models.CASCADE,
                             blank=True,
                             verbose_name="Заказ",
-                            related_name="order_items")
+                            related_name="ordered_items")
     product = models.ForeignKey(ProductInfo, 
                             on_delete=models.CASCADE,
                             blank=True,
                             verbose_name="Продукт",
-                            related_name="order_items")
+                            related_name="ordered_items")
     shop = models.ForeignKey(Shop, 
                             on_delete=models.CASCADE,
                             blank=True,
                             verbose_name="Магазин",
-                            related_name="order_items")
+                            related_name="ordered_items")
     quantity = models.PositiveIntegerField(verbose_name="Количество")
 
     class Meta:
