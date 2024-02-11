@@ -195,14 +195,18 @@ class ProductParameter(models.Model):
         return self.name
 
 class Order(models.Model):
+    objects = models.manager.Manager()
     user = models.ForeignKey(User, 
                         on_delete=models.CASCADE,
                         related_name="orders",
                         blank=True,
                         verbose_name="Пользователь")
     dt = models.DateTimeField(auto_now_add=True)
-    status = models.CharField(max_length=50, verbose_name = "Статус", choices = STATE_CHOICES)
-
+    state = models.CharField(max_length=50, verbose_name = "Статус", choices = STATE_CHOICES)
+    total_sum = models.BigIntegerField()
+    contact = models.ForeignKey('Contact', verbose_name='Контакт',
+                                blank=True, null=True,
+                                on_delete=models.CASCADE)
     class Meta:
         verbose_name = "Заказ" 
         verbose_name_plural = "Заказы"

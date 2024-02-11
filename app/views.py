@@ -1,9 +1,9 @@
 from django.http import JsonResponse
 from requests import request
 
-from django.shortcuts import render, redirect
 from django.conf import settings
-from django.db.models import Q, Sum, F
+from django.shortcuts import render, redirect
+from django.db.models import Q, Sum, F, Prefetch
 from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth import authenticate, logout
 from django.db import IntegrityError
@@ -159,14 +159,14 @@ class CartAPIView(APIView):
                 - Response: The response containing the items in the user's basket.
                 """
         if not request.user.is_authenticated:
-            return JsonResponse({'Status': False, 'Error': 'Log in required'}, status=403)
-        basket = Order.objects.filter(
-            user_id=request.user.id, state='basket').prefetch_related(
-            'ordered_items__product_info__product__category',
-            'ordered_items__product_info__product_parameters__parameter').annotate(
+            return JsonResponse({'status': False, 'Error':'Log in required'}, status=403)
+        print(request.user.id)
+        queryset = Order.objects.filter(user=request.user.id, state='basket').prefetch_related(
+            Prefetch('order_items__product_info__product__category', queryset=Category.objects.all()),
+            Prefetch('order_items__product_info__product_parameters__parameter', queryset=Parameter.objects.all()),
+            ).annotate(
             total_sum=Sum(F('ordered_items__quantity') * F('ordered_items__product_info__price'))).distinct()
-
-        serializer = OrderSerializer(basket, many=True)
+        serializer = OrderSerializer(queryset, many=True)
         return Response(serializer.data)
     
     def post(self, request, *args, **kwargs):
@@ -188,7 +188,7 @@ class CartAPIView(APIView):
                 items_dict = load_json(items)
             except ValueError:
                 JsonResponse({'status': False, 'errors': 'Неверный формат запроса'})
-            order, status = Order.objects.get_or_create(user=request.user.id, status='basket')
+            order, status = Order.objects.get_or_create(user=request.user.id, state='basket')
             objects_created = 0
             for order_item in items_dict:
                 order_item.update({'order': order.id})

@@ -156,3 +156,23 @@ REST_FRAMEWORK = {
 AUTHENTICATION_BACKENDS = ('django.contrib.auth.backends.ModelBackend',)
 
 DEFAULT_PERMISSION_CLASSES = ('rest_framework.permissions.AllowAny',)
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': 'DEBUG',  # Установите нужный уровень, например, 'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'
+    },
+    'loggers': {
+        'django.db.backends': {
+            'level': 'DEBUG',
+            'handlers': ['console', ],
+        },
+    },
+}
