@@ -205,22 +205,65 @@ class CartAPIView(APIView):
             return JsonResponse({'status': True, 'объектов создано': objects_created})    
         return JsonResponse({'status': False, 'errors': 'Не указаны все необходимые аргументы'})    
 
+    def delete(self, request, *args, **kwargs):
+        """
+                Remove  items from the user's basket.
 
-    def put(self, request):
-        user = request.user.id
-        user_obj = User.objects.get(id=user)
-        order = Order.objects.create(user=user_obj, status='new')
-        product_obj = Product.objects.get(id=request.data.get('product'))
-        shop_obj = Shop.objects.get(id=request.data.get('shop'))
-        order_items = OrderItem.objects.create(
-            order=order,
-            product=product_obj,
-            shop=shop_obj,
-            quantity=request.data.get('quantity'),
-        )
+                Args:
+                - request (Request): The Django request object.
 
+                Returns:
+                - JsonResponse: The response indicating the status of the operation and any errors.
+                """
+        if not request.user.is_authenticated:
+            return JsonResponse({'Status': False, 'Error': 'Log in required'}, status=403)
 
-        return Response(user)
+        items_sting = request.data.get('items')
+        if items_sting:
+            items_list = items_sting.split(',')
+            basket, _ = Order.objects.get_or_create(user_id=request.user.id, state='basket')
+            query = Q()
+            objects_deleted = False
+            for order_item_id in items_list:
+                if order_item_id.isdigit():
+                    query = query | Q(order_id=basket.id, id=order_item_id)
+                    objects_deleted = True
+
+            if objects_deleted:
+                deleted_count = OrderItem.objects.filter(query).delete()[0]
+                return JsonResponse({'Status': True, 'Удалено объектов': deleted_count})
+        return JsonResponse({'Status': False, 'Errors': 'Не указаны все необходимые аргументы'})    
+
+    def put(self, request, *args, **kwargs):
+        """
+               Update the items in the user's basket.
+
+               Args:
+               - request (Request): The Django request object.
+
+               Returns:
+               - JsonResponse: The response indicating the status of the operation and any errors.
+               """
+        if not request.user.is_authenticated:
+            return JsonResponse({'Status': False, 'Error': 'Log in required'}, status=403)
+
+        items_sting = request.data.get('items')
+        if items_sting:
+            try:
+                items_dict = load_json(items_sting)
+            except ValueError:
+                return JsonResponse({'Status': False, 'Errors': 'Неверный формат запроса'})
+            else:
+                basket, _ = Order.objects.get_or_create(user_id=request.user.id, state='basket')
+                objects_updated = 0
+                for order_item in items_dict:
+                    if type(order_item['id']) == int and type(order_item['quantity']) == int:
+                        objects_updated += OrderItem.objects.filter(order_id=basket.id, id=order_item['id']).update(
+                            quantity=order_item['quantity'])
+
+                return JsonResponse({'Status': True, 'Обновлено объектов': objects_updated})
+        return JsonResponse({'Status': False, 'Errors': 'Не указаны все необходимые аргументы'})
+
         
 def upload_products(request):
     if request.method == 'POST':
