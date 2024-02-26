@@ -92,11 +92,3 @@ class OrderSerializer(serializers.ModelSerializer):
         fields = ('id', 'ordered_items', 'state', 'dt', 'total_sum', 'contact',)
         read_only_fields = ('id',)
 
-
-class ContactSerializer(serializers.ModelSerializer):
-    user = UserSerializer()
-    class Meta:
-        model = Contact
-        fields = ('id', 'type', 'user', 'value')
-        read_only_fields = ('id',)
-        

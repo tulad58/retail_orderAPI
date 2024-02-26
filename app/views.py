@@ -14,10 +14,10 @@ from rest_framework import generics
 from rest_framework.response import Response
 from rest_framework.request import Request 
 
-from .models import Shop, Category, Contact, Order, OrderItem, Parameter, Product, ProductInfo, ProductParameter, User
+from .models import ConfirmEmailToken, Shop, Category, Contact, Order, OrderItem, Parameter, Product, ProductInfo, ProductParameter, User
 
 from .serializers import CategorySerializer, ContactSerializer, OrderItemSerializer, OrderSerializer, ProductInfoSerializer, ShopSerializer, UserSerializer
-
+from app.signals import new_user_registered, new_order
 from ujson import loads as load_json
 from yaml import load as load_yaml, Loader
 
@@ -25,6 +25,22 @@ class RegisterAccount(APIView):
     """
     Для регистрации покупателей
     """
+    def get(self, request: Request, *args, **kwargs):
+        """
+               Retrieve the details of the authenticated user.
+
+               Args:
+               - request (Request): The Django request object.
+
+               Returns:
+               - Response: The response containing the details of the authenticated user.
+        """
+        if not request.user.is_authenticated:
+            return JsonResponse({'Status': False, 'Error': 'Log in required'}, status=403)
+
+        serializer = UserSerializer(request.user)
+        return Response(serializer.data)
+        
     def post(self, request, *args, **kwargs):
         """
             Process a POST request and create a new user.
@@ -62,7 +78,6 @@ class LoginAccount(APIView):
     Класс для авторизации пользователей
     """
 
-    # Авторизация методом POST
     def post(self, request, *args, **kwargs):
         """
                 Authenticate a user.
@@ -147,7 +162,6 @@ class CartAPIView(APIView):
     - None
     """
 
-    # получить корзину
     def get(self, request, *args, **kwargs):
         """
                 Retrieve the items in the user's basket.
@@ -315,7 +329,6 @@ class ContactAPIView(APIView):
         if 'id' in request.data:
             if request.data['id'].isdigit():
                 contact = Contact.objects.filter(id=request.data['id'], user_id=request.user.id).first()
-                print(contact)
                 if contact:
                     serializer = ContactSerializer(contact, data=request.data, partial=True)
                     if serializer.is_valid():
@@ -359,7 +372,6 @@ class OrderView(APIView):
     - None
     """
 
-    # получить мои заказы
     def get(self, request, *args, **kwargs):
         """
                Retrieve the details of user orders.
@@ -381,7 +393,6 @@ class OrderView(APIView):
         serializer = OrderSerializer(order, many=True)
         return Response(serializer.data)
 
-    # разместить заказ из корзины
     def post(self, request, *args, **kwargs):
         """
                Put an order and send a notification.
@@ -448,6 +459,37 @@ class PartnerOrders(APIView):
         serializer = OrderSerializer(order, many=True)
         return Response(serializer.data)
     
+
+class ConfirmAccount(APIView):
+    """
+    Класс для подтверждения почтового адреса
+    """
+
+    def post(self, request, *args, **kwargs):
+        """
+                Подтверждает почтовый адрес пользователя.
+
+                Args:
+                - request (Request): The Django request object.
+
+                Returns:
+                - JsonResponse: The response indicating the status of the operation and any errors.
+                """
+        if {'email', 'token'}.issubset(request.data):
+            print(request.data['token'])
+
+            token = ConfirmEmailToken.objects.filter(user__email=request.data['email'],
+                                                    key=request.data['token']).first()
+            print(token)
+            if token:
+                token.user.is_active = True
+                token.user.save()
+                token.delete()
+                return JsonResponse({'Status': True})
+            else:
+                return JsonResponse({'Status': False, 'Errors': 'Неправильно указан токен или email'})
+
+        return JsonResponse({'Status': False, 'Errors': 'Не указаны все необходимые аргументы'})
 
 def upload_products(request):
     """
