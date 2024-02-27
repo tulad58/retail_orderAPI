@@ -41,6 +41,7 @@ class RegisterAccount(APIView):
         serializer = UserSerializer(request.user)
         return Response(serializer.data)
         
+        
     def post(self, request, *args, **kwargs):
         """
             Process a POST request and create a new user.
